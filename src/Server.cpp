@@ -71,16 +71,16 @@ void Server::handleEvents()
 		{
 			_fds.push_back({_socketAccept(pfd.fd), POLLIN | POLLOUT, 0});
 		}
-		if (pfd.revents & POLLIN)
+		else if (pfd.revents & POLLIN)
 		{
 			LOG("fd: " << pfd.fd << " POLLIN");
-			// if (!echo(pfd.fd))
-			// {
-			// 	close(pfd.fd);
-			// 	_fds.erase(_fds.begin() + i);
-			// }
+			if (!echo(pfd.fd))
+			{
+				close(pfd.fd);
+				_fds.erase(_fds.begin() + i);
+			}
 		}
-		if (pfd.revents & POLLOUT)
+		else if (pfd.revents & POLLOUT)
 		{
 			LOG("fd: " << pfd.fd << " POLLOUT");
 		}
