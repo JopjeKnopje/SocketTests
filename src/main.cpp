@@ -93,7 +93,7 @@ int acceptConnections(int serverFd)
 	}
 	else
 	{
-		LOG("Accepted client on fd: " << serverFd << " with clientFd " << clientFd);
+		LOG("Accepted client on listening socket, fd: " << serverFd << " with clientFd " << clientFd);
 	}
 
 	return clientFd;
@@ -130,6 +130,15 @@ int main()
 
 	pollFds.push_back({serverFd, POLLIN, 0});
 
+	int serverFda;
+
+	if (!setup(8081, serverFda))
+	{
+		return 1;
+	}
+	pollFds.push_back({serverFda, POLLIN, 0});
+
+
 
 	while (1)
 	{
@@ -145,19 +154,19 @@ int main()
 		for (size_t i = 0; i < pollFds.size(); i++)
 		{
 			pollfd &pfd = pollFds[i];
-			LOG("checking sock fd: " << pfd.fd);
-
-			// check if current fd is listening socket.
 			int val;
 			socklen_t len = sizeof(val);
 			getsockopt(pfd.fd, SOL_SOCKET, SO_ACCEPTCONN, &val, &len);
+
+			LOG("checking " << (val ? "listening" : "client") << "socket, fd: " << pfd.fd);
+
+			// check if current fd is listening socket.
 			if (val && pfd.revents)
 			{
-				LOG("event on listen socket " << pfd.fd)
-				int clientFd = acceptConnections(serverFd);
+				int clientFd = acceptConnections(pfd.fd);
 				pollFds.push_back({clientFd, POLLIN | POLLOUT, 0});
 			}
-// chunked reading/writing
+
 			else if (pfd.revents)
 			{
 				if (pfd.revents & POLLIN)
