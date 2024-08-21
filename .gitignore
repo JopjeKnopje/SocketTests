@@ -1,4 +1,4 @@
-*/.cache
+.cache
 Session.vim
 compile_commands.json
 app

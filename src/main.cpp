@@ -20,12 +20,9 @@
 #include <unistd.h>
 #include <poll.h>
 #include <vector>
+#include "Server.hpp"
 
-#define LOG_ERROR(x) std::cerr << "[ERROR] : " << x << std::endl;
-#define LOG(x) std::cout << "[INFO] : " << x << std::endl;
 
-#define POLL_TIMEOUT 100
-#define LISTEN_BACKLOG 8
 
 
 bool setup(const uint16_t port, int &serverFd)
@@ -118,7 +115,7 @@ bool handleConnection(int fd)
 	return true;
 }
 
-int main()
+int main1()
 {
 	int serverFd;
 	if (!setup(8080, serverFd))
@@ -130,13 +127,12 @@ int main()
 
 	pollFds.push_back({serverFd, POLLIN, 0});
 
-	int serverFda;
 
-	if (!setup(8081, serverFda))
+	if (!setup(8081, serverFd))
 	{
 		return 1;
 	}
-	pollFds.push_back({serverFda, POLLIN, 0});
+	pollFds.push_back({serverFd, POLLIN, 0});
 
 
 
@@ -150,10 +146,10 @@ int main()
 		}
 		LOG("nReady: " << nReady);
 
-
 		for (size_t i = 0; i < pollFds.size(); i++)
 		{
 			pollfd &pfd = pollFds[i];
+
 			int val;
 			socklen_t len = sizeof(val);
 			getsockopt(pfd.fd, SOL_SOCKET, SO_ACCEPTCONN, &val, &len);
@@ -191,17 +187,20 @@ int main()
 		}
 	}
 
-
-
-
-
 	close(serverFd);
 	for (pollfd pfd : pollFds)
 	{
 		close(pfd.fd);
 	}
-
 	LOG("Test");
+	return 0;
+}
+
+int main ()
+{
+	std::vector<Server> servers;
+
+
 
 	return 0;
 }

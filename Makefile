@@ -9,11 +9,11 @@ IFLAGS		:=	-Iinclude
 
 SRC_DIR		:=	src
 SRC_ENTRY	:=	main.cpp
-SRCS		:= 
+SRCS		:=	Server.cpp
 
 
 HEADER_DIR	:=	include
-HEADERS 	:=
+HEADERS 	:=	Server.hpp
 
 OBJ_DIR		:=	obj
 
