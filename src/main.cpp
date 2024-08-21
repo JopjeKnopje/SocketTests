@@ -100,25 +100,22 @@ int acceptConnections(int serverFd)
 }
 
 
-void handleConnection(int fd)
+bool handleConnection(int fd)
 {
 	char buffer[1024];
 	const std::string bye_str = "Cya!\n";
-	while (1)
+	bzero(&buffer, sizeof(buffer));
+	// read up on EWOULDBLOCK
+	recv(fd, buffer, sizeof(buffer), 0);
+	LOG("Received: [" << buffer << "]");
+
+	if (!buffer[0] || !std::strcmp(buffer, "yup\r\n"))
 	{
-		bzero(&buffer, sizeof(buffer));
-		// read up on EWOULDBLOCK
-		recv(fd, buffer, sizeof(buffer), 0);
-		LOG("Received: [" << buffer << "]");
-
-		if (!buffer[0] || !std::strcmp(buffer, "yup\r\n"))
-		{
-			send(fd, bye_str.c_str(), bye_str.length() * sizeof(char), 0);
-			break;
-		}
-		send(fd, buffer, sizeof(buffer), 0);
+		send(fd, bye_str.c_str(), bye_str.length() * sizeof(char), 0);
+		return false;
 	}
-
+	send(fd, buffer, sizeof(buffer), 0);
+	return true;
 }
 
 int main()
@@ -156,21 +153,28 @@ int main()
 			getsockopt(pfd.fd, SOL_SOCKET, SO_ACCEPTCONN, &val, &len);
 			if (val && pfd.revents)
 			{
-				// Handle listening socket.
 				LOG("event on listen socket " << pfd.fd)
 				int clientFd = acceptConnections(serverFd);
 				pollFds.push_back({clientFd, POLLIN | POLLOUT, 0});
 			}
-
+// chunked reading/writing
 			else if (pfd.revents)
 			{
 				if (pfd.revents & POLLIN)
 				{
-					LOG("fd: " << pfd.fd << " POLLIN");
+					// LOG("fd: " << pfd.fd << " POLLIN");
+					if (!handleConnection(pfd.fd))
+					{
+						// while line not null
+						// string reponse = httphandler.handle(line)
+						close(pfd.fd);
+						pollFds.erase(pollFds.begin() + i);
+					}
 				}
 				if (pfd.revents & POLLOUT)
 				{
-					LOG("fd: " << pfd.fd << " POLLOUT");
+
+					// LOG("fd: " << pfd.fd << " POLLOUT");
 					// std::string msg = "client on fd: " + std::to_string(pfd.fd) + "\n";
 					// send(pfd.fd, msg.c_str(), msg.length() * sizeof(char), 0);
 				}
@@ -192,4 +196,3 @@ int main()
 
 	return 0;
 }
-
