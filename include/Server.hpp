@@ -16,16 +16,20 @@ public:
 	~Server() = default;
 
 
-	const std::vector<pollfd>& getClients();
+	Server(uint16_t port);
+	Server(std::vector<uint16_t> ports);
 
+
+	void handleEvents();
+
+	const std::vector<int>& getListenFds() const;
+	std::vector<pollfd>& getFds();
 
 private:
-	std::vector<pollfd> _listenFds;
-	std::vector<pollfd> _clientFds;
+	std::vector<pollfd> _fds;
+	std::vector<int> _listenFds;
 
-
-	int _socketCreate();
-	int _socketBind(int &fd, uint16_t port);
-	
+	static int _socketCreate();
+	static bool _socketBind(int fd, uint16_t port);
+	static int _socketAccept(int fd);
 };
-

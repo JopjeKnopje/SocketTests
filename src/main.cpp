@@ -8,6 +8,7 @@
 #include <cstring>
 #include <functional>
 #include <iostream>
+#include <iterator>
 #include <memory_resource>
 #include <string>
 #include <sys/poll.h>
@@ -21,6 +22,7 @@
 #include <poll.h>
 #include <vector>
 #include "Server.hpp"
+#include "meta.hpp"
 
 
 
@@ -167,7 +169,7 @@ int main1()
 			{
 				if (pfd.revents & POLLIN)
 				{
-					// LOG("fd: " << pfd.fd << " POLLIN");
+					LOG("fd: " << pfd.fd << " POLLIN");
 					if (!handleConnection(pfd.fd))
 					{
 						// while line not null
@@ -178,8 +180,7 @@ int main1()
 				}
 				if (pfd.revents & POLLOUT)
 				{
-
-					// LOG("fd: " << pfd.fd << " POLLOUT");
+					LOG("fd: " << pfd.fd << " POLLOUT");
 					// std::string msg = "client on fd: " + std::to_string(pfd.fd) + "\n";
 					// send(pfd.fd, msg.c_str(), msg.length() * sizeof(char), 0);
 				}
@@ -196,11 +197,36 @@ int main1()
 	return 0;
 }
 
-int main ()
+
+
+
+int main()
 {
 	std::vector<Server> servers;
 
+	servers.push_back({{8080, 8081}});
 
 
+
+	while (1)
+	{
+		for (size_t i = 0; i < servers.size(); i++)
+		{
+			Server &s = servers[i];
+
+			int nReady = poll(s.getFds().data(), s.getFds().size(), POLL_TIMEOUT);
+			if (nReady == -1)
+			{
+				LOG_ERROR("Failed polling: " << strerror(errno));
+				return 0;
+			}
+			LOG("nReady: " << nReady);
+
+			// if (nReady)
+			s.handleEvents();
+
+
+		}
+	}
 	return 0;
 }
