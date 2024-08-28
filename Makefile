@@ -25,7 +25,7 @@ HEADERS 	:=	$(addprefix $(HEADER_DIR)/, $(HEADERS))
 OBJS 		:=	$(patsubst $(SRC_DIR)%.c, $(OBJ_DIR)%.o, $(SRCS))
 OBJ_DIRS 	:=	$(dir $(OBJS))
 
-.PHONY: make_libs
+.PHONY: make_libs fclean
 
 all: 
 	$(MAKE) $(NAME) -j4
@@ -40,11 +40,7 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c $(HEADERS)
 clean:
 	rm -rf $(OBJ_DIR)
 
-tclean:
-	rm -rf $(TEST)/bin
-
-fclean: clean tclean
-	$(MAKE) -C libft fclean
+fclean: clean
 	rm -f $(NAME)
 	rm -rf $(NAME).dSYM
 
@@ -57,5 +53,5 @@ compile_commands: fclean
 	$(MAKE) | compiledb
 
 norm:
-	norminette libft include src
+	norminette include src
 

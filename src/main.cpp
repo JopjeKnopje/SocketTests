@@ -10,9 +10,10 @@ int main()
 	std::vector<Server> servers;
 
 	servers.push_back({{8080, 8081}});
+	servers.push_back({{9090, 9091}});
 
 
-	bool state = true;
+	bool printReady = true;
 
 	while (1)
 	{
@@ -25,19 +26,17 @@ int main()
 				LOG_ERROR("Failed polling: " << strerror(errno));
 				return 0;
 			}
-			else if (state && !nReady)
+			else if (printReady && !nReady)
 			{
 				LOG("nReady: " << nReady);
-				state = false;
+				printReady = false;
 			}
 			else if (nReady)
 			{
 				LOG("nReady: " << nReady);
-				state = true;
+				printReady = true;
 				s.handleEvents();
 			}
-
-
 		}
 	}
 	return 0;
