@@ -46,3 +46,5 @@ stop:
 fclean: stop
 	docker image rm $(NAME_IMG)
 
+re: fclean all
+
