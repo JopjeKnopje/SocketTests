@@ -4,9 +4,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iostream>
-#include <list>
 #include <netinet/in.h>
-#include <set>
 #include <string>
 #include <sys/poll.h>
 #include <sys/socket.h>
@@ -22,15 +20,6 @@ void replace_first(
     std::size_t pos = s.find(toReplace);
     if (pos == std::string::npos) return;
     s.replace(pos, toReplace.length(), replaceWith);
-}
-
-static std::string removeKeepalive(char *buf, size_t len)
-{
-	std::string s(buf, len);
-
-	replace_first(s, "Connection: keep-alive", "Connection: closed");
-
-	return s;
 }
 
 static bool echo(int fd)
@@ -68,6 +57,11 @@ static bool echo(int fd)
 	}
 	send(fd, s.c_str(), s.length(), 0);
 
+
+	// NOTE according to the http docs we can use the same connection for multiple requests.
+	// Therefore we dont HAVE to close the connection after sending this response.
+	// However in our current setup (in which we will send only 1 response this will work)
+	// https://developer.mozilla.org/en-US/docs/Web/HTTP/Overview
 
 	return false;
 }
