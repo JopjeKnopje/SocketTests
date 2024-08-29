@@ -7,28 +7,69 @@
 #include <list>
 #include <netinet/in.h>
 #include <set>
+#include <string>
 #include <sys/poll.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <vector>
 
 
+void replace_first(
+    std::string& s,
+    std::string const& toReplace,
+    std::string const& replaceWith
+) {
+    std::size_t pos = s.find(toReplace);
+    if (pos == std::string::npos) return;
+    s.replace(pos, toReplace.length(), replaceWith);
+}
+
+static std::string removeKeepalive(char *buf, size_t len)
+{
+	std::string s(buf, len);
+
+	replace_first(s, "Connection: keep-alive", "Connection: closed");
+
+	return s;
+}
+
 static bool echo(int fd)
 {
-	char buffer[1024];
+	const size_t buf_size = 1024;
+	char buffer[buf_size];
 	const std::string bye_str = "Cya!\n";
 	bzero(&buffer, sizeof(buffer));
 	// read up on EWOULDBLOCK
-	recv(fd, buffer, sizeof(buffer), 0);
+	recv(fd, buffer, buf_size, 0);
 	LOG("Received: [" << buffer << "]");
 
-	if (!buffer[0] || !std::strcmp(buffer, "yup\r\n"))
+
+	std::string s = 
+	"HTTP/1.1 200 OK\r\n"
+	"Server: nginx/1.27.1\r\n"
+	"Date: Thu, 29 Aug 2024 13:02:31 GMT\r\n"
+	"Content-Type: text/html\r\n"
+	"Content-Length: 615\r\n"
+	"Last-Modified: Mon, 12 Aug 2024 14:21:01 GMT\r\n"
+	// "Connection: closed\r\n"
+	// "ETag: \\"66ba1a4d-267"\\"
+	"Accept-Ranges: bytes\r\n";
+
+	s += "\r\n<h3> Fakka strijders </h3>\r\n";
+
+	// if (!s[0] || !std::strcmp(s.c_str(), "yup\r\n"))
+	// {
+	// 	send(fd, bye_str.c_str(), bye_str.length() * sizeof(char), 0);
+	// 	return false;
+	// }
+	if (!s[0])
 	{
-		send(fd, bye_str.c_str(), bye_str.length() * sizeof(char), 0);
 		return false;
 	}
-	send(fd, buffer, sizeof(buffer), 0);
-	return true;
+	send(fd, s.c_str(), s.length(), 0);
+
+
+	return false;
 }
 
 
@@ -61,6 +102,7 @@ Server::Server(std::vector<uint16_t> ports)
 
 void Server::handleEvents()
 {
+	// loop over connections
 	for (size_t i = 0; i < _fds.size(); i++)
 	{
 		pollfd &pfd = _fds[i];
@@ -69,10 +111,13 @@ void Server::handleEvents()
 		// if current fd is a listener
 		if (pfd.revents && std::count(getListenFds().begin(), getListenFds().end(), pfd.fd))
 		{
+			// if new connection
+			// connections.add new connection
 			_fds.push_back({_socketAccept(pfd.fd), POLLIN | POLLOUT, 0});
 		}
 		else if (pfd.revents & POLLIN)
 		{
+			// connection.gethttphandler.appendToBuf(connection.data)
 			LOG("fd: " << pfd.fd << " POLLIN");
 			if (!echo(pfd.fd))
 			{
@@ -82,6 +127,8 @@ void Server::handleEvents()
 		}
 		else if (pfd.revents & POLLOUT)
 		{
+			// connection.httphandler.response.ready?
+			// connection.send
 			LOG("fd: " << pfd.fd << " POLLOUT");
 		}
 	}

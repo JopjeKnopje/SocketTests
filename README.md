@@ -33,3 +33,12 @@ server
 route
 
 
+
+
+
+
+
+plan
+1. fixed response
+2. read body content from file
+3. try to upload file
