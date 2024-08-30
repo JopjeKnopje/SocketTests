@@ -1,3 +1,3 @@
-#!/usr/bin/env bash
+#!n/usr/bin/env bash
 service nginx start
 php-fpm

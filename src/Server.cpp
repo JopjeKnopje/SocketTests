@@ -97,15 +97,19 @@ Server::Server(std::vector<uint16_t> ports)
 void Server::handleEvents()
 {
 	// loop over connections
+	// vec <fd> 
+
 	for (size_t i = 0; i < _fds.size(); i++)
 	{
 		pollfd &pfd = _fds[i];
 		LOG("checking fd: " << pfd.fd);
 
 		// if current fd is a listener
+		// if current fd is ListenFd
 		if (pfd.revents && std::count(getListenFds().begin(), getListenFds().end(), pfd.fd))
 		{
 			// if new connection
+			// vec add new ClientFd
 			// connections.add new connection
 			_fds.push_back({_socketAccept(pfd.fd), POLLIN | POLLOUT, 0});
 		}
