@@ -1,4 +1,5 @@
 #include "Server.hpp"
+#include <cstddef>
 #include <cstdlib>
 #include <map>
 #include <sys/wait.h>
@@ -69,8 +70,8 @@ std::pair<int, int> cgi_start()
 		exit(123);
 	}
 
-	close(pipe_fds[1]);
 
+	close(pipe_fds[1]);
 
 	return {pipe_fds[0], pid};
 }
@@ -90,13 +91,12 @@ std::string cgi_wait(int pid, int pipe_fd_read)
 	close(pipe_fd_read);
 	LOG("read from pipe: " << buf);
 	
-	LOG("exit code: " << WEXITSTATUS(status));
 	return buf;
 }
 
 
 
-static std::pair<int, int> response_start(int fd)
+static std::pair<int, int> response_start(int fd, bool *empty)
 {
 	const size_t buf_size = 1024;
 	char buffer[buf_size];
@@ -105,6 +105,9 @@ static std::pair<int, int> response_start(int fd)
 	// read up on EWOULDBLOCK
 	recv(fd, buffer, buf_size, 0);
 	LOG("Received: [" << buffer << "]");
+	*empty = std::string(buffer).empty();
+	if (*empty)
+		return {-1, -1};
 
 
 
@@ -171,8 +174,13 @@ void Server::handleEvents()
 	// pipe_fd, <cgi_pid, client_fd>
 	std::map<int, std::pair<int, pollfd>> shit;
 
+	static size_t counter = 0;
+
 	for (size_t i = 0; i < _fds.size(); i++)
 	{
+		counter++;
+		// if (counter > 20)
+		// 	exit(123);
 		pollfd &pfd = _fds[i];
 		LOG("checking fd: " << pfd.fd);
 
@@ -181,14 +189,14 @@ void Server::handleEvents()
 		if (pfd.revents && shit.find(pfd.fd) != shit.end())
 		{
 			LOG("pfd.fd : " << pfd.fd << " is a pipe");
-			// const pollfd client_pfd = shit[pfd.fd].second;
-			// const int cgi_pid = shit[pfd.fd].first;
-			// const int pipe_fd = pfd.fd;
-			//
-			// reponse_wait(cgi_pid, pipe_fd, client_pfd.fd);
-			// shit.erase(shit.find(pipe_fd));
-			//
-			// close(client_pfd.fd);
+			const pollfd client_pfd = shit[pfd.fd].second;
+			const int cgi_pid = shit[pfd.fd].first;
+			const int pipe_fd = pfd.fd;
+
+			reponse_wait(cgi_pid, pipe_fd, client_pfd.fd);
+			shit.erase(shit.find(pipe_fd));
+
+			close(client_pfd.fd);
 
 			// _fds.erase(std::find(_fds.begin(), _fds.end(), client_pfd));
 			// shit.erase(shit.find(pfd.fd));
@@ -206,14 +214,15 @@ void Server::handleEvents()
 		{
 			LOG("fd: " << pfd.fd << " POLLIN");
 
-			std::pair<int, int> pipefd_pid = response_start(pfd.fd);
+			bool empty;
+			std::pair<int, int> pipefd_pid = response_start(pfd.fd, &empty);
+			if (!empty)
+			{
+				pollfd newpfd {pipefd_pid.first, POLLIN | POLLOUT, 0};
 
-			pollfd newpfd {pipefd_pid.first, POLLIN, 0};
-
-			_fds.push_back(newpfd);
-			shit[pipefd_pid.first] = {pipefd_pid.second, newpfd};
-
-			
+				_fds.push_back(newpfd);
+				shit[pipefd_pid.first] = {pipefd_pid.second, newpfd};
+			}
 
 			// close(pfd.fd);
 			// _fds.erase(_fds.begin() + i);
