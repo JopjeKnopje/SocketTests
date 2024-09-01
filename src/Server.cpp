@@ -1,4 +1,9 @@
 #include "Server.hpp"
+#include <cstdlib>
+#include <map>
+#include <sys/wait.h>
+#include <strings.h>
+#include <unistd.h>
 #include "meta.hpp"
 #include <algorithm>
 #include <cstdint>
@@ -9,6 +14,7 @@
 #include <sys/poll.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <utility>
 #include <vector>
 
 
@@ -22,7 +28,75 @@ void replace_first(
     s.replace(pos, toReplace.length(), replaceWith);
 }
 
-static bool echo(int fd)
+
+int pipe_fds[2];
+std::pair<int, int> cgi_start()
+{
+
+	::pipe(pipe_fds);
+
+	int pid = fork();
+	if (pid == -1)
+	{
+		LOG_ERROR("Fork failed");
+	}
+	if (pid == 0)
+	{
+		close(pipe_fds[0]);
+		LOG("Child spawned");
+		if (dup2(pipe_fds[1], STDOUT_FILENO) == -1)
+		{
+			LOG_ERROR("dup2 failed");
+		}
+		close(pipe_fds[1]);
+
+
+		// char * const argv[] = {
+		// 	"sleep",
+		// 	"5",
+		// 	NULL,
+		// };
+
+		char * const argv[] = {
+			"ls",
+			"-lsa",
+			NULL,
+		};
+
+		if (execvp(argv[0], argv) == -1)
+			LOG_ERROR("execvp failed");
+
+		exit(123);
+	}
+
+	close(pipe_fds[1]);
+
+
+	return {pipe_fds[0], pid};
+}
+
+std::string cgi_wait(int pid, int pipe_fd_read)
+{
+
+	const size_t buf_size = 123;
+	char buf[buf_size];
+	bzero(&buf, buf_size);
+
+	int32_t status;
+	LOG("waiting on pid: " << pid);
+	::waitpid(pid, &status, 0);
+
+	read(pipe_fd_read, buf, buf_size - 1);
+	close(pipe_fd_read);
+	LOG("read from pipe: " << buf);
+	
+	LOG("exit code: " << WEXITSTATUS(status));
+	return buf;
+}
+
+
+
+static std::pair<int, int> response_start(int fd)
 {
 	const size_t buf_size = 1024;
 	char buffer[buf_size];
@@ -32,6 +106,18 @@ static bool echo(int fd)
 	recv(fd, buffer, buf_size, 0);
 	LOG("Received: [" << buffer << "]");
 
+
+
+	return cgi_start();
+
+	// return and contintue to poll shit
+}
+
+static void reponse_wait(int pid, int pipe_fd_read, int client_fd)
+{
+
+	// jump back in and finish building response
+	cgi_wait(pid, pipe_fd_read);
 
 	std::string s = 
 	"HTTP/1.1 200 OK\r\n"
@@ -46,24 +132,10 @@ static bool echo(int fd)
 
 	s += "\r\n<h3> Fakka strijders </h3>\r\n";
 
-	// if (!s[0] || !std::strcmp(s.c_str(), "yup\r\n"))
-	// {
-	// 	send(fd, bye_str.c_str(), bye_str.length() * sizeof(char), 0);
-	// 	return false;
-	// }
-	if (!s[0])
-	{
-		return false;
-	}
-	send(fd, s.c_str(), s.length(), 0);
 
 
-	// NOTE according to the http docs we can use the same connection for multiple requests.
-	// Therefore we dont HAVE to close the connection after sending this response.
-	// However in our current setup (in which we will send only 1 response this will work)
-	// https://developer.mozilla.org/en-US/docs/Web/HTTP/Overview
+	send(client_fd, s.c_str(), s.length(), 0);
 
-	return false;
 }
 
 
@@ -96,17 +168,34 @@ Server::Server(std::vector<uint16_t> ports)
 
 void Server::handleEvents()
 {
-	// loop over connections
-	// vec <fd> 
+	// pipe_fd, <cgi_pid, client_fd>
+	std::map<int, std::pair<int, pollfd>> shit;
 
 	for (size_t i = 0; i < _fds.size(); i++)
 	{
 		pollfd &pfd = _fds[i];
 		LOG("checking fd: " << pfd.fd);
 
-		// if current fd is a listener
-		// if current fd is ListenFd
-		if (pfd.revents && std::count(getListenFds().begin(), getListenFds().end(), pfd.fd))
+		// check if pfd.fd is in map instead of this count bs with a second vector.
+
+		if (pfd.revents && shit.find(pfd.fd) != shit.end())
+		{
+			LOG("pfd.fd : " << pfd.fd << " is a pipe");
+			// const pollfd client_pfd = shit[pfd.fd].second;
+			// const int cgi_pid = shit[pfd.fd].first;
+			// const int pipe_fd = pfd.fd;
+			//
+			// reponse_wait(cgi_pid, pipe_fd, client_pfd.fd);
+			// shit.erase(shit.find(pipe_fd));
+			//
+			// close(client_pfd.fd);
+
+			// _fds.erase(std::find(_fds.begin(), _fds.end(), client_pfd));
+			// shit.erase(shit.find(pfd.fd));
+		}
+
+
+		else if (pfd.revents && std::count(getListenFds().begin(), getListenFds().end(), pfd.fd))
 		{
 			// if new connection
 			// vec add new ClientFd
@@ -115,13 +204,19 @@ void Server::handleEvents()
 		}
 		else if (pfd.revents & POLLIN)
 		{
-			// connection.gethttphandler.appendToBuf(connection.data)
 			LOG("fd: " << pfd.fd << " POLLIN");
-			if (!echo(pfd.fd))
-			{
-				close(pfd.fd);
-				_fds.erase(_fds.begin() + i);
-			}
+
+			std::pair<int, int> pipefd_pid = response_start(pfd.fd);
+
+			pollfd newpfd {pipefd_pid.first, POLLIN, 0};
+
+			_fds.push_back(newpfd);
+			shit[pipefd_pid.first] = {pipefd_pid.second, newpfd};
+
+			
+
+			// close(pfd.fd);
+			// _fds.erase(_fds.begin() + i);
 		}
 		else if (pfd.revents & POLLOUT)
 		{
@@ -131,7 +226,6 @@ void Server::handleEvents()
 		}
 	}
 }
-
 
 
 const std::vector<int>& Server::getListenFds() const
